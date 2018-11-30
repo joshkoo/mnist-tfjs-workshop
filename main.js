@@ -8,8 +8,8 @@ var PROGRESS_UI = null;
 
 // ML Config
 const EPOCHS = 1;
-const BATCH_SIZE = 320;
-const VALIDATION_SPLIT = 0.15;
+const BATCH_SIZE = 350;
+const VALIDATION_SPLIT = 0.10;
 var MODEL = null;
 var DATA = null;
 
@@ -36,7 +36,16 @@ function createConvModel() {
  */
 
 function createDenseModel() {
-  // TODO
+  // const model = tf.sequential();
+  // model.add(tf.layers.flatten({ inputShape:[4,1]}))
+  // model.add(tf.layers.dense({units:3, activation:"relu"})) //dense means everything to everything
+  // model.add(tf.layers.dense({units:3, activation:"softmax"})) 
+  const model = tf.sequential();
+  model.add(tf.layers.flatten({ inputShape:[IMAGE_H,IMAGE_W,1]}))
+  model.add(tf.layers.dense({units:42, activation:"relu"}))//dense means everything to everything
+  // model.add(tf.layers.dense({units:10, activation:"relu"})) 
+  model.add(tf.layers.dense({units:10, activation:"softmax"}) )
+  return model
 }
 
 /**
@@ -44,10 +53,64 @@ function createDenseModel() {
  */
 async function trainModel() {
   // TODO
+  MODEL= createDenseModel();
+  MODEL.compile({
+    optimizer: "rmsprop",
+    loss: 'categoricalCrossentropy',
+    metrics:["accuracy"]
+  })
+
+  const trainData= DATA.getTrainData();
+  let trainBatchCount = 0;
+  const totalNumBatches =
+    Math.ceil((trainData.xs.shape[0] * (1 - VALIDATION_SPLIT)) / BATCH_SIZE) *
+    EPOCHS;
+
+  console.log("🎉 Training Start");
+  await MODEL.fit(trainData.xs, trainData.labels, {
+    batchSize: BATCH_SIZE,
+    validationSplit: VALIDATION_SPLIT, // Leave out the last 15% of the training data for validation, to monitor overfitting during training.
+    epochs: EPOCHS,
+    callbacks: {
+      onBatchEnd: async (batch, logs) => {
+        trainBatchCount++;
+        let percentComplete = (
+          (trainBatchCount / totalNumBatches) *
+          100
+        ).toFixed(1);
+        PROGRESS_UI.setProgress(percentComplete);
+        PROGRESS_UI.setStatus(`ACC ${logs.acc.toFixed(3)}`);
+        console.log(`Training... (${percentComplete}% complete)`);
+        await tf.nextFrame();
+      },
+      onEpochEnd: async (epoch, logs) => {
+        valAcc = logs.val_acc;
+        console.log(`Accuracy: ${valAcc}`);
+        PROGRESS_UI.setStatus(`*ACC ${logs.val_acc.toFixed(3)}`);
+        await tf.nextFrame();
+      }
+    }
+  });
+  console.log("🍾 Training Complete");
+  const testData= DATA.getTestData();
+  const testResult = MODEL.evaluate(testData.xs,testData.labels)
+  const testAccPercent= testResult[1].dataSync()[0]*100;
+  console.log(`final test accuracy: ${testAccPercent.toFixed(1)}%`)
 }
 
 function inferModel(data) {
   // TODO
+  let inputs = tf.tensor4d(data, [1, 28, 28, 1]);
+  // tf.tidy(() => {
+  const output = MODEL.predict(inputs);
+  const distribution = output.dataSync(); // turn into js array
+  const axis = 1;
+  const prediction = Array.from(output.argMax(axis).dataSync())[0];
+
+  // });
+  inputs.dispose(); // whenever you create tensors you need to dispose them to manage the memors
+  output.dispose();
+  return { prediction, distribution };
 }
 
 async function loadAndTrain() {

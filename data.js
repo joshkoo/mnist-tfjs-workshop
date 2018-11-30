@@ -126,11 +126,11 @@ class MnistData {
       IMAGE_H,
       IMAGE_W,
       1
-    ]);
+    ]); // 55000 28 28 1 | 55000 images each 28 x 28 px 
     const labels = tf.tensor2d(this.trainLabels, [
       this.trainLabels.length / NUM_CLASSES,
       NUM_CLASSES
-    ]);
+    ]); // one hot encoded labels [0,0,0,0,0,0,0,0,0,1] means 9
     return { xs, labels };
   }
 
